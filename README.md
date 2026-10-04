@@ -64,7 +64,8 @@ returns `false` when there is no preview. `loadTrack` returns `null` on 404
 ## Self-tests
 
 ```sh
-python3 tests/test_parse_lookup.py   # parse + floor/coverage math model (both SDKs)
+python3 tests/test_parse_lookup.py      # parse + floor/coverage math model (both SDKs)
+python3 tests/test_contribute_model.py  # contribute-half model (Kotlin v0.2 track)
 node --check packages/js/src/index.js  # JS syntax (node present in dev env)
 ```
 
