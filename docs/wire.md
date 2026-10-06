@@ -129,7 +129,9 @@ Keyed (need `X-API-Key`):
   `POST /v1/jobs/<id>/ack` / `fail` (see below)
 
 There is **no public job or request intake**. `POST /v1/requests` and
-`POST /v1/jobs` are gone. The only public write is `POST /v1/contribute`, where a client uploads previews it captured itself. Those two paths now
+`POST /v1/jobs` are gone. The
+only public write is `POST /v1/contribute`, where a client uploads previews it
+captured itself and the registry never fetches anything. Those two paths now
 answer `404 {"error":"public intake is closed - POST previews you captured
 with POST /v1/contribute"}` — unauthed too, so the 404 never reads as "get a
 key and retry".
