@@ -1,12 +1,27 @@
 {
   "name": "@openseek/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0-unreleased",
   "description": "Dependency-free browser client for the OpenSeek seek-preview registry",
   "type": "module",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js"
   },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yatin-Code/openseek-sdk.git",
+    "directory": "packages/js"
+  },
+  "homepage": "https://github.com/Yatin-Code/openseek-sdk#readme",
+  "bugs": "https://github.com/Yatin-Code/openseek-sdk/issues",
   "scripts": {
     "check": "node --check src/index.js"
   },

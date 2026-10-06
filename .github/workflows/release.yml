@@ -1,5 +1,6 @@
-# Release SDK notes (tag-push driven, publishing notes only)
-# Manual equivalent: git tag v0.1.0 && git push origin v0.1.0
+# Release SDK (tag-push driven): notes job + npm / Maven Central publish jobs.
+# Publish jobs run ONLY on v* tags; prep checklist lives in docs/PUBLISHING.md.
+# Manual equivalent: git tag v0.2.0 && git push origin v0.2.0
 name: Release SDK
 
 on:
@@ -44,3 +45,79 @@ jobs:
             --notes "OpenSeek seek-preview SDK ${GITHUB_REF_NAME}: dependency-free JS + pure-JVM Kotlin clients (lookup, VTT parse, floor lookup with coverage bound, tile crop). See CHANGELOG.md. TODO: Maven Central / npm publish."
           # TODO: publish packages/kotlin to Maven Central and packages/js to npm.
           # Not wired yet — this workflow publishes release notes only.
+
+  # Live publish jobs. The whole workflow triggers ONLY on v* tags (see `on:`
+  # above); the `if:` guards below are defense-in-depth so a future trigger
+  # edit can never publish from a branch push.
+  #
+  # PR dry-run equivalents (safe, never upload — run these first, see
+  # docs/PUBLISHING.md "if a step fails"):
+  #   npm:      cd packages/js && npm publish --dry-run
+  #   maven:    ./gradlew publishToMavenLocal   (needs the Gradle build that
+  #             applies packages/kotlin/publish.gradle.kts — not in repo yet)
+
+  publish-npm:
+    name: Publish JS to npm
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/js
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      - name: Refuse placeholder versions
+        run: |
+          node -e "const v=require('./package.json').version; if (v.includes('unreleased')) { console.error('::error::package.json version is still '+v+' — bump to the release number before tagging'); process.exit(1); }"
+
+      - name: Run self-tests (Python parse/lookup model)
+        run: python3 ../../tests/test_parse_lookup.py
+
+      - name: Syntax-check JS package
+        run: node --check src/index.js
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  publish-maven:
+    name: Publish Kotlin to Maven Central
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Fail fast until the Gradle build exists
+        run: |
+          test -f gradlew || { echo "::error::no Gradle wrapper yet — land a build applying packages/kotlin/publish.gradle.kts first (see docs/PUBLISHING.md step 0)"; exit 1; }
+
+      - name: Publish to Sonatype (then close/release via Central Portal UI)
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          export RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          ./gradlew publish --info

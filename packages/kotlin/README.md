@@ -9,3 +9,7 @@ Single file: `src/main/kotlin/openseek/OpenSeekClient.kt`.
 for `BitmapFactory.decodeByteArray` + `Bitmap.createBitmap(...)` (marked in
 the source). See the repo README for the 10-line ExoPlayer integration and
 `docs/wire.md` for the frozen v0 contract.
+
+Publishing: Maven Central template is `publish.gradle.kts` in this directory
+(group `tv.openseek`, no Gradle build in repo yet) — full checklist in
+`docs/PUBLISHING.md`.
