@@ -125,8 +125,14 @@ Keyed (need `X-API-Key`):
   unauthed caller cannot probe which contribution ids exist
 - `POST /v1/contributions`, `POST /v1/verify`, `POST /v1/promote`, and the
   `/v1/contributions/<id>/verify|promote` forms
-- `POST /v1/requests`
-- the `/v1/jobs*` family (enqueue, lease, ack, fail)
+- internal worker routes only: `POST /v1/jobs/lease` and
+  `POST /v1/jobs/<id>/ack` / `fail` (see below)
+
+There is **no public job or request intake**. `POST /v1/requests` and
+`POST /v1/jobs` are gone. The only public write is `POST /v1/contribute`, where a client uploads previews it captured itself. Those two paths now
+answer `404 {"error":"public intake is closed - POST previews you captured
+with POST /v1/contribute"}` — unauthed too, so the 404 never reads as "get a
+key and retry".
 
 Open (no key):
 
@@ -134,7 +140,8 @@ Open (no key):
 - `GET /v1/keys/validate` — open route that *checks* the presented key: known →
   `200 {"valid":true,"name":…}`, anything else → `401 {"valid":false}`. Quota-free
   by design, so it is safe for a settings dialog to call.
-- `GET /v1/requests` (backlog read; the POST is keyed)
+- `GET /v1/requests` — the backlog read stays open, but with intake closed it
+  answers empty unless the operator's own tooling wrote a row
 - `/s/**` static, `/healthz`
 
 A key never bypasses verification — promotion still refuses an unverified
@@ -175,7 +182,15 @@ silently matches nothing on any minted row.
 `GET /v1/titles` (version list), `GET /v1/status`, `GET /v1/catalog`
 (browsable index, `?limit` capped at 1000), `POST /v1/contribute`
 (multipart intake → quarantine → verify → promote/merge), `POST /v1/register`
-(population-time upsert), `POST /v1/requests` (log a title someone wants
-indexed; a body that also carries `video_url` enqueues a real job instead), and
-`GET /v1/contributions/<id>` (intake state for one contribution). Their key
-requirements are in the Auth table above. See the registry source for shapes.
+(population-time upsert), and `GET /v1/contributions/<id>` (intake state for
+one contribution). Their key requirements are in the Auth table above. See the
+registry source for shapes.
+
+### Internal worker routes (not part of the public contract)
+
+`POST /v1/jobs/lease`, `POST /v1/jobs/<id>/ack` and `POST /v1/jobs/<id>/fail`
+are keyed like everything else, but they are for the operator's own workers and
+are not part of the public API: nothing hands a stranger a job, and no SDK calls
+them. The `jobs` table behind them is still real — the operator's producer
+inserts rows into it directly, on the registry host, because the database is
+not reachable from anywhere else.
