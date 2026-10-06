@@ -1,0 +1,46 @@
+# Release SDK notes (tag-push driven, publishing notes only)
+# Manual equivalent: git tag v0.1.0 && git push origin v0.1.0
+name: Release SDK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Self-test + publish release notes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Run self-tests (Python parse/lookup model)
+        run: python3 tests/test_parse_lookup.py
+
+      - name: Syntax-check JS package
+        run: node --check packages/js/src/index.js
+
+      - name: Create GitHub release with notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "openseek-sdk ${GITHUB_REF_NAME}" \
+            --notes "OpenSeek seek-preview SDK ${GITHUB_REF_NAME}: dependency-free JS + pure-JVM Kotlin clients (lookup, VTT parse, floor lookup with coverage bound, tile crop). See CHANGELOG.md. TODO: Maven Central / npm publish."
+          # TODO: publish packages/kotlin to Maven Central and packages/js to npm.
+          # Not wired yet — this workflow publishes release notes only.
