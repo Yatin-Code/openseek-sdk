@@ -1,6 +1,7 @@
 // OpenSeek JS SDK — dependency-free browser client (v0.1.0).
 // Lookup once (registry /v1/sprites), resolve any positionMs to a sheet crop,
-// blit the tile to a canvas. No API key needed for lookups.
+// blit the tile to a canvas. The registry keys every lookup: pass `apiKey` and
+// it is sent as X-API-Key (see docs/wire.md, "Auth").
 //
 // Pure logic mirrors the Kotlin core (query building, VTT parse, floor lookup
 // with coverage bound). Supersedes sdk/js/peek.js, which hit the local-origin
@@ -106,10 +107,16 @@ export function thumbnailFor(track, positionMs, coveredUntilMs = track.covered_u
 /**
  * Full lookup: GET /v1/sprites -> parse envelope -> GET vtt_url -> track.
  * Returns null on 404 (unknown title) — the caller hides the preview.
+ *
+ * `apiKey` is required by the live registry and sent as X-API-Key when
+ * non-blank; blank/null/undefined omits the header (which 401s against a
+ * keyed registry — the thrown message says "HTTP 401"). It goes on the
+ * lookup only, never on the VTT fetch: that URL usually points at the CDN.
  * `fetchFn` defaults to global fetch (inject a mock in tests).
  */
-export async function loadTrack(registryUrl, { fetchFn = fetch } = {}) {
-  const res = await fetchFn(registryUrl);
+export async function loadTrack(registryUrl, { fetchFn = fetch, apiKey } = {}) {
+  const key = apiKey == null ? "" : String(apiKey).trim();
+  const res = await fetchFn(registryUrl, key ? { headers: { "X-API-Key": key } } : undefined);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`lookup failed: HTTP ${res.status}`);
   const body = await res.json();
@@ -126,12 +133,12 @@ export async function loadTrack(registryUrl, { fetchFn = fetch } = {}) {
   };
 }
 
-/** Convenience: build the movie URL and look it up. */
+/** Convenience: build the movie URL and look it up. `opts` carries {apiKey}. */
 export function loadMovieTrack(base, params, opts) {
   return loadTrack(movieUrl(base, params), opts);
 }
 
-/** Convenience: build the episode URL and look it up. */
+/** Convenience: build the episode URL and look it up. `opts` carries {apiKey}. */
 export function loadEpisodeTrack(base, params, opts) {
   return loadTrack(episodeUrl(base, params), opts);
 }

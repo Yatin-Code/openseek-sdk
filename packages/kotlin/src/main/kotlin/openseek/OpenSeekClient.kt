@@ -134,8 +134,14 @@ fun parseVtt(vttText: String, vttUrl: String): List<Cue> {
 
 /**
  * Registry client. [base] is the registry origin, e.g. "https://tiles.example.com".
- * [apiKey], when set, is sent as X-API-Key (only the /v1/jobs routes require it;
- * lookups stay open — see docs/wire.md "permissive mode").
+ *
+ * [apiKey] is sent as `X-API-Key` when non-null. It stays nullable so existing
+ * constructor calls keep compiling, but the hosted registry keys EVERY route
+ * this client calls: a null key gets `401 {"error":"api key required
+ * (X-API-Key)"}` and an unknown key gets `401 {"error":"invalid api key"}`.
+ * The key gate runs first on the lookup, before `duration_ms` is read. Pass a
+ * real key against a hosted registry — see docs/wire.md "Auth". Only a
+ * keyless self-hosted registry will serve a null [apiKey].
  */
 class OpenSeekClient(val base: String, val apiKey: String? = null) {
 
@@ -168,11 +174,16 @@ class OpenSeekClient(val base: String, val apiKey: String? = null) {
      * Returns null on 404 (unknown title) — the caller hides the preview.
      * Throws on transport errors; callers doing scrub-driven fetch should
      * catch and treat as a silent miss.
+     *
+     * A 401 is the usual failure for a default-constructed client (no
+     * [apiKey], or one the registry does not know). [fail] names the key
+     * explicitly so the cause is legible in a stack trace rather than just a
+     * status code.
      */
     fun loadTrack(registryUrl: String): Track? {
         val (code, body) = get(registryUrl)
         if (code == 404) return null
-        check(code in 200..299) { "lookup failed: HTTP $code" }
+        fail(code, body, "lookup failed")
         val vttUrl = stringField(body, "vtt_url") ?: error("lookup response missing vtt_url")
         val sourceDuration = longField(body, "source_duration_ms") ?: 0L
         val scale = doubleField(body, "scale") ?: 1.0
@@ -259,6 +270,26 @@ class OpenSeekClient(val base: String, val apiKey: String? = null) {
         } finally {
             c.disconnect()
         }
+    }
+
+    /**
+     * Throw on a non-2xx response, with the registry's own `error` string
+     * folded into the message. 401 gets the key treatment spelled out: the
+     * hosted registry keys every lookup, so the fix is "pass an apiKey",
+     * not "retry".
+     */
+    private fun fail(code: Int, body: String, what: String) {
+        if (code in 200..299) return
+        val serverError = stringField(body, "error")
+        val suffix = serverError?.let { ": $it" }.orEmpty()
+        if (code == 401) {
+            error(
+                "$what: HTTP 401$suffix — the hosted registry requires an API key. " +
+                    "Construct the client as OpenSeekClient(base, apiKey); a null apiKey " +
+                    "is sent as no header at all. See docs/wire.md \"Auth\"."
+            )
+        }
+        error("$what: HTTP $code$suffix")
     }
 
     private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
